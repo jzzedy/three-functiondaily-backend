@@ -1,7 +1,10 @@
+
 import mysql from 'mysql2/promise'; 
 import dotenv from 'dotenv';
 
 dotenv.config(); 
+
+const enableSsl = process.env.NODE_ENV === 'production' || process.env.DB_SSL_ENABLED === 'true';
 
 const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
@@ -12,30 +15,17 @@ const dbConfig = {
   waitForConnections: true,
   connectionLimit: 10, 
   queueLimit: 0,
-  namedPlaceholders: true, 
+  namedPlaceholders: true,
+  
+  ...(enableSsl ? { ssl: { rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false' } } : {})
+  
 };
+
+console.log('[DB_CONFIG] Using SSL:', enableSsl);
+if (enableSsl) {
+    console.log('[DB_CONFIG] SSL rejectUnauthorized:', dbConfig.ssl?.rejectUnauthorized);
+}
 
 const pool = mysql.createPool(dbConfig);
-
-const testConnection = async () => {
-  try {
-    const connection = await pool.getConnection();
-    console.log('Successfully connected to the database.');
-    
-    const [rows] = await connection.query('SELECT 1 + 1 AS solution');
-    
-    connection.release(); 
-  } catch (error) {
-    console.error('Error connecting to the database:', error);
-    
-    
-    process.exit(1); 
-  }
-};
-
-
-
-
-
 
 export default pool;
