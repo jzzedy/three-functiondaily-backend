@@ -1,4 +1,5 @@
-import { Response } from 'express';
+// src/controllers/aiController.ts
+import type { Response } from 'express'; 
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { getAiSuggestion } from '../services/aiService';
 import pool from '../config/database';
@@ -17,21 +18,20 @@ interface AiTriggerEventData {
   action?: AiAction; 
   count?: number; 
   currency?: 'PHP' | 'USD'; 
-  expenseAmount?: number; 
-  habitStreakLength?: number; 
-  type?: string; 
-               
+  expenseAmount?: number;
+  habitStreakLength?: number;
   [key: string]: any; 
 }
 
-const getRichUserContext = async (userId: string, username?: string | null, eventData?: AiTriggerEventData): Promise<string> => {
-    console.log(`[DEBUG AI_CONTROLLER] Getting rich context for userId: ${userId}, eventData:`, eventData);
+// Added suggestionType parameter here
+const getRichUserContext = async (userId: string, username?: string | null, eventData?: AiTriggerEventData, suggestionType?: string): Promise<string> => {
+    console.log(`[DEBUG AI_CONTROLLER] Getting rich context for userId: ${userId}, eventData:`, eventData, `suggestionType: ${suggestionType}`);
     let contextParts: string[] = [];
     contextParts.push(`User: ${username || 'Valued User'}.`);
-    contextParts.push(`Today is ${format(new Date(), 'EEEE, MMMM d, yyyy')}.`); 
+    contextParts.push(`Today is ${format(new Date(), 'EEEE, MMMM d,<y_bin_46>')}.`); 
 
     try {
-        
+        // Task context
         const todayYYYYMMDD = format(new Date(), 'yyyy-MM-dd');
         const [overdueTasksResult] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) as count FROM Tasks WHERE userId = ? AND isCompleted = FALSE AND deadline < ?", [userId, todayYYYYMMDD]);
         const overdueTasksCount = overdueTasksResult[0]?.count || 0;
@@ -42,14 +42,14 @@ const getRichUserContext = async (userId: string, username?: string | null, even
         if (dueTodayTasksCount > 0) contextParts.push(`They also have ${dueTodayTasksCount} task${dueTodayTasksCount > 1 ? 's' : ''} due today.`);
         else if (overdueTasksCount === 0 && eventData?.action !== 'completed') contextParts.push("They have no tasks immediately due or overdue.");
 
-        
+        // Use passed suggestionType for conditions
         if (eventData?.action === 'completed' && eventData.itemName) {
             contextParts.push(`They just completed the task: "${eventData.itemName}".`);
-        } else if (eventData?.action === 'added' && eventData.itemName && (eventData.type === 'task_tip' || eventData.suggestionType === 'task_tip')) {
+        } else if (eventData?.action === 'added' && eventData.itemName && (suggestionType === 'task_tip')) { 
             contextParts.push(`They just added a new task: "${eventData.itemName}".`);
         }
 
-        
+        // Expense context
         const now = new Date();
         const monthStart = format(startOfMonth(now), 'yyyy-MM-dd');
         const monthEnd = format(endOfMonth(now), 'yyyy-MM-dd');
@@ -57,8 +57,8 @@ const getRichUserContext = async (userId: string, username?: string | null, even
         const monthlyTotal = monthlyExpensesResult[0]?.total || 0;
         if (monthlyTotal > 0) contextParts.push(`This month, they have spent ${eventData?.currency || '$'}${parseFloat(monthlyTotal).toFixed(2)} so far.`);
 
-        
-        if (eventData?.type === 'expense_insight' || eventData?.suggestionType === 'expense_insight') { 
+        // Use passed suggestionType for conditions
+        if(suggestionType === 'expense_insight') { 
             if(eventData?.action === 'added' && eventData.itemCategory && eventData.itemValue) {
                 contextParts.push(`They just added an expense of ${eventData.itemValue} for "${eventData.itemCategory}".`);
             }
@@ -70,14 +70,15 @@ const getRichUserContext = async (userId: string, username?: string | null, even
             }
         }
 
-        
-        if (eventData?.type === 'habit_motivation' || eventData?.suggestionType === 'habit_motivation') { 
+        // Habit context
+        // Use passed suggestionType for conditions
+        if (suggestionType === 'habit_motivation') { 
             if (eventData?.action === 'created' && eventData.itemName) {
                 contextParts.push(`They just created a new habit: "${eventData.itemName}".`);
             }
             if (eventData?.action === 'streak_update' && eventData.itemName && eventData.habitStreakLength) {
                 contextParts.push(`They are now on a ${eventData.habitStreakLength}-day streak for their habit: "${eventData.itemName}".`);
-            } else if (!eventData.action) { 
+            } else if (!eventData?.action) { 
                 const [habitsResult] = await pool.query<RowDataPacket[]>("SELECT name FROM Habits WHERE userId = ? ORDER BY updatedAt DESC LIMIT 1", [userId]); 
                 if (habitsResult.length > 0) {
                     contextParts.push(`One of their habits is "${habitsResult[0].name}".`);
@@ -94,8 +95,7 @@ const getRichUserContext = async (userId: string, username?: string | null, even
 
 export const handleAiSuggestion = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   console.log('[DEBUG AI_CONTROLLER] handleAiSuggestion called. Body:', req.body);
-  
-  const { suggestionType, data: eventData } = req.body as { suggestionType: string, data?: AiTriggerEventData };
+  const { suggestionType, data: eventData } = req.body as { suggestionType: string, data?: AiTriggerEventData }; 
   const userId = req.user?.id;
   const username = req.user?.username;
 
@@ -109,8 +109,8 @@ export const handleAiSuggestion = async (req: AuthenticatedRequest, res: Respons
   }
 
   let prompt = "";
-  
-  const userContext = await getRichUserContext(userId, username, eventData); 
+  // Pass suggestionType to getRichUserContext
+  const userContext = await getRichUserContext(userId, username, eventData, suggestionType); 
 
   switch (suggestionType) {
     case 'general_greeting':
