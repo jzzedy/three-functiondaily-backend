@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction, RequestHandler } from 'express';
 import { protect } from '../middleware/authMiddleware';
 import {
     getExpenses,
@@ -11,17 +11,21 @@ import {
 
 const router = Router();
 
-router.use(protect); 
+const asyncHandler = (fn: (req: Request, res: Response, next: NextFunction) => Promise<void>): RequestHandler =>
+    (req, res, next) => {
+        Promise.resolve(fn(req, res, next)).catch(next);
+    };
+router.use(protect as RequestHandler);
 
 router.route('/')
-    .get(getExpenses)
-    .post(createExpense);
+    .get(asyncHandler(getExpenses as any))
+    .post(asyncHandler(createExpense as any)); 
 
-router.get('/summary', getExpenseSummary);
+router.get('/summary', asyncHandler(getExpenseSummary as any));
 
 router.route('/:expenseId')
-    .get(getExpenseById)
-    .put(updateExpense)
-    .delete(deleteExpense);
+    .get(asyncHandler(getExpenseById as any)) 
+    .put(asyncHandler(updateExpense as any))
+    .delete(asyncHandler(deleteExpense as any));
 
 export default router;
