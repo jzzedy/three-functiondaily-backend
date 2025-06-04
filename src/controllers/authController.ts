@@ -2,11 +2,11 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt, { Secret, SignOptions } from 'jsonwebtoken'; 
 import { v4 as uuidv4 } from 'uuid'; 
-import crypto from 'crypto';
+import crypto from 'crypto'; 
 import pool from '../config/database';
 import { User, UserWithPasswordHash } from '../types/userTypes';
 import { RowDataPacket, ResultSetHeader } from 'mysql2/promise'; 
-import { AuthenticatedRequest } from '../middleware/authMiddleware';
+import { AuthenticatedRequest } from '../middleware/authMiddleware'; 
 
 const JWT_SECRET_KEY: Secret = process.env.JWT_SECRET || 
     (process.env.NODE_ENV === 'production' ? (() => { throw new Error("JWT_SECRET not set in production for authController!"); })() : 'your-dev-fallback-secret-key-32-chars-long-for-auth');
@@ -28,6 +28,10 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
 
     if (!email || !password) {
         res.status(400).json({ message: 'Email and password are required.' });
+        return;
+    }
+    if (password.length < 8) {
+        res.status(400).json({ message: "Password must be at least 8 characters long."});
         return;
     }
 
@@ -134,36 +138,90 @@ export const requestPasswordReset = async (req: Request, res: Response): Promise
 
         if (users.length === 0) {
             console.log(`Password reset requested for non-existent email: ${email}`);
-            res.status(200).json({ message: 'If your email is registered, you will receive instructions to reset your password.' });
+            res.status(200).json({ message: 'If an account exists for this email, instructions to reset your password have been sent.' });
             return;
         }
 
-        const user = users[0] as User;
+        const user = users[0] as User; 
         const resetToken = crypto.randomBytes(32).toString('hex');
         const salt = await bcrypt.genSalt(10);
         const tokenHash = await bcrypt.hash(resetToken, salt);
 
         const expiresAt = new Date(Date.now() + 3600000); 
+
         await pool.query('DELETE FROM PasswordResetTokens WHERE userId = ?', [user.id]);
 
         await pool.query<ResultSetHeader>(
             'INSERT INTO PasswordResetTokens (id, userId, tokenHash, expiresAt) VALUES (?, ?, ?, ?)',
             [uuidv4(), user.id, tokenHash, expiresAt]
         );
-        //reset password first test
+
         const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password/${resetToken}`;
         console.log('------------------------------------');
-        console.log('PASSWORD RESET REQUESTED');
+        console.log('PASSWORD RESET REQUESTED (SIMULATION)');
         console.log(`User Email: ${email}`);
         console.log(`User ID: ${user.id}`);
         console.log(`Plain Reset Token (FOR TESTING ONLY): ${resetToken}`);
         console.log(`Simulated Reset Link: ${resetLink}`);
         console.log('------------------------------------');
 
-        res.status(200).json({ message: 'If your email is registered, you will receive instructions to reset your password.' });
+        res.status(200).json({ message: 'If an account exists for this email, instructions to reset your password have been sent.' });
 
     } catch (error) {
         console.error('Error requesting password reset:', error);
         res.status(500).json({ message: 'Server error while requesting password reset.' });
+    }
+};
+
+export const resetPassword = async (req: Request, res: Response): Promise<void> => {
+    const { token } = req.params; 
+    const { newPassword } = req.body;
+
+    if (!token || !newPassword) {
+        res.status(400).json({ message: 'Token and new password are required.' });
+        return;
+    }
+    if (newPassword.length < 8) {
+        res.status(400).json({ message: 'Password must be at least 8 characters long.'});
+        return;
+    }
+
+    try {
+        const [tokenRecords] = await pool.query<RowDataPacket[]>(
+            'SELECT * FROM PasswordResetTokens WHERE expiresAt > NOW()',
+        );
+
+        let foundTokenRecord: RowDataPacket | undefined;
+        let userIdFromToken: string | undefined;
+
+        for (const record of tokenRecords) {
+            const isMatch = await bcrypt.compare(token, record.tokenHash);
+            if (isMatch) {
+                foundTokenRecord = record;
+                userIdFromToken = record.userId;
+                break; 
+            }
+        }
+
+        if (!foundTokenRecord || !userIdFromToken) {
+            res.status(400).json({ message: 'Invalid or expired password reset token.' });
+            return;
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const newPasswordHash = await bcrypt.hash(newPassword, salt);
+
+        await pool.query<ResultSetHeader>(
+            'UPDATE Users SET passwordHash = ? WHERE id = ?',
+            [newPasswordHash, userIdFromToken]
+        );
+
+        await pool.query('DELETE FROM PasswordResetTokens WHERE id = ?', [foundTokenRecord.id]);
+
+        res.status(200).json({ message: 'Password has been reset successfully.' });
+
+    } catch (error) {
+        console.error('Error resetting password:', error);
+        res.status(500).json({ message: 'Server error while resetting password.' });
     }
 };
