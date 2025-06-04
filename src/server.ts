@@ -1,12 +1,12 @@
 import express, { Express, Request, Response } from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
-//import pool from './config/database';
-//import authRoutes from './routes/authRoutes';
-import taskRoutes from './routes/taskRoutes';
-import expenseRoutes from './routes/expenseRoutes';
-import habitRoutes from './routes/habitRoutes';
-import aiRoutes from './routes/aiRoutes'; 
+import pool from './config/database'; 
+// import authRoutes from './routes/authRoutes'; 
+// import taskRoutes from './routes/taskRoutes';
+// import expenseRoutes from './routes/expenseRoutes';
+// import habitRoutes from './routes/habitRoutes';
+// import aiRoutes from './routes/aiRoutes'; 
 
 dotenv.config();
 
@@ -36,10 +36,14 @@ app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.get('/', (req: Request, res: Response) => {
-  res.send('Server with core middleware (no app.options, no app routes) is Running!');
-});
-
-app.listen(port, () => {
-  console.log(`[server]: Server (core middleware only) is running on port ${port}`);
-});
+const checkDbConnection = async () => { 
+    try {
+        const connection = await pool.getConnection();
+        console.log('Database connected successfully on server startup.');
+        await connection.query('SELECT 1');
+        connection.release();
+    } catch (error) {
+        console.error('Failed to connect to database on server startup:', error);
+        process.exit(1); 
+    }
+};
