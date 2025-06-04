@@ -2,11 +2,11 @@ import express, { Express, Request, Response } from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import pool from './config/database'; 
-// import authRoutes from './routes/authRoutes'; 
-// import taskRoutes from './routes/taskRoutes';
-// import expenseRoutes from './routes/expenseRoutes';
-// import habitRoutes from './routes/habitRoutes';
-// import aiRoutes from './routes/aiRoutes'; 
+import authRoutes from './routes/authRoutes';
+import taskRoutes from './routes/taskRoutes';
+import expenseRoutes from './routes/expenseRoutes';
+import habitRoutes from './routes/habitRoutes';
+import aiRoutes from './routes/aiRoutes'; 
 
 dotenv.config();
 
@@ -47,3 +47,34 @@ const checkDbConnection = async () => {
         process.exit(1); 
     }
 };
+
+//API Routes 
+// app.use('/api/v1/auth', authRoutes);
+// app.use('/api/v1/tasks', taskRoutes);
+// app.use('/api/v1/expenses', expenseRoutes);
+// app.use('/api/v1/habits', habitRoutes);
+// app.use('/api/v1/ai', aiRoutes); 
+
+
+app.get('/api/v1', (req: Request, res: Response) => {
+  res.json({ message: 'Welcome to ThreeFunctionDaily API!' });
+});
+
+app.get('/api/v1/db-test', async (req: Request, res: Response) => { 
+    try {
+        const [rows] = await pool.query('SELECT NOW() as currentTime');
+        res.json({ success: true, data: rows });
+    } catch (error) {
+        console.error('DB test route error:', error);
+        res.status(500).json({ success: false, message: 'Failed to query database.' });
+    }
+});
+
+const startServer = async () => {
+    await checkDbConnection();
+    app.listen(port, () => {
+      console.log(`[server]: Server is running at http://localhost:${port}`);
+    });
+};
+
+startServer();
