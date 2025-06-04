@@ -1,17 +1,16 @@
-// src/controllers/authController.ts
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt, { Secret, SignOptions } from 'jsonwebtoken'; 
 import { v4 as uuidv4 } from 'uuid'; 
+import crypto from 'crypto';
 import pool from '../config/database';
 import { User, UserWithPasswordHash } from '../types/userTypes';
-import { RowDataPacket } from 'mysql2/promise'; 
+import { RowDataPacket, ResultSetHeader } from 'mysql2/promise'; 
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 
 const JWT_SECRET_KEY: Secret = process.env.JWT_SECRET || 
     (process.env.NODE_ENV === 'production' ? (() => { throw new Error("JWT_SECRET not set in production for authController!"); })() : 'your-dev-fallback-secret-key-32-chars-long-for-auth');
 
-// JWT_EXPIRES_IN will be a string like "7d" or a string representing number of seconds
 const JWT_EXPIRES_IN_VALUE: string = process.env.JWT_EXPIRES_IN || '7d';
 
 if (JWT_SECRET_KEY === 'your-dev-fallback-secret-key-32-chars-long-for-auth' && process.env.NODE_ENV !== 'test') {
@@ -20,10 +19,6 @@ if (JWT_SECRET_KEY === 'your-dev-fallback-secret-key-32-chars-long-for-auth' && 
 
 const generateToken = (userId: string, email: string): string => {
     const payload = { userId, email };
-    // The `expiresIn` option can be a string (e.g., "1h", "7d") or a number (seconds).
-    // Since JWT_EXPIRES_IN_VALUE is a string, this should be acceptable by the library.
-    // The type error is often due to overly strict @types/jsonwebtoken definitions or TS inference.
-    // Using 'as any' here is a pragmatic way to bypass the type checker for this specific known-good case.
     const options: SignOptions = { expiresIn: JWT_EXPIRES_IN_VALUE as any }; 
     return jwt.sign(payload, JWT_SECRET_KEY, options);
 };
@@ -122,4 +117,53 @@ export const getCurrentUser = async (req: AuthenticatedRequest, res: Response): 
         return;
     }
     res.status(200).json({ user: req.user });
+};
+
+export const requestPasswordReset = async (req: Request, res: Response): Promise<void> => {
+    const { email } = req.body;
+    if (!email) {
+        res.status(400).json({ message: 'Email is required.' });
+        return;
+    }
+
+    try {
+        const [users] = await pool.query<RowDataPacket[]>(
+            'SELECT id FROM Users WHERE email = ?',
+            [email]
+        );
+
+        if (users.length === 0) {
+            console.log(`Password reset requested for non-existent email: ${email}`);
+            res.status(200).json({ message: 'If your email is registered, you will receive instructions to reset your password.' });
+            return;
+        }
+
+        const user = users[0] as User;
+        const resetToken = crypto.randomBytes(32).toString('hex');
+        const salt = await bcrypt.genSalt(10);
+        const tokenHash = await bcrypt.hash(resetToken, salt);
+
+        const expiresAt = new Date(Date.now() + 3600000); 
+        await pool.query('DELETE FROM PasswordResetTokens WHERE userId = ?', [user.id]);
+
+        await pool.query<ResultSetHeader>(
+            'INSERT INTO PasswordResetTokens (id, userId, tokenHash, expiresAt) VALUES (?, ?, ?, ?)',
+            [uuidv4(), user.id, tokenHash, expiresAt]
+        );
+        //reset password first test
+        const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password/${resetToken}`;
+        console.log('------------------------------------');
+        console.log('PASSWORD RESET REQUESTED');
+        console.log(`User Email: ${email}`);
+        console.log(`User ID: ${user.id}`);
+        console.log(`Plain Reset Token (FOR TESTING ONLY): ${resetToken}`);
+        console.log(`Simulated Reset Link: ${resetLink}`);
+        console.log('------------------------------------');
+
+        res.status(200).json({ message: 'If your email is registered, you will receive instructions to reset your password.' });
+
+    } catch (error) {
+        console.error('Error requesting password reset:', error);
+        res.status(500).json({ message: 'Server error while requesting password reset.' });
+    }
 };
