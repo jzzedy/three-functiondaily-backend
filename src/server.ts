@@ -51,7 +51,7 @@ const checkDbConnection = async () => {
     }
 };
 //Routes
-app.use('/api/v1/auth', authRoutes);
+//app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/tasks', taskRoutes);
 app.use('/api/v1/expenses', expenseRoutes);
 app.use('/api/v1/habits', habitRoutes);
