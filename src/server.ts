@@ -51,14 +51,14 @@ const checkDbConnection = async () => {
     }
 };
 //Routes
-app.use('/api/v1/auth', authRoutes);
-app.use('/api/v1/tasks', taskRoutes);
-app.use('/api/v1/expenses', expenseRoutes);
-app.use('/api/v1/habits', habitRoutes);
+//app.use('/api/v1/auth', authRoutes);
+//app.use('/api/v1/tasks', taskRoutes);
+//app.use('/api/v1/expenses', expenseRoutes);
+//app.use('/api/v1/habits', habitRoutes);
 //app.use('/api/v1/ai', aiRoutes); 
 
 
-app.get('/api/v1', (req: Request, res: Response) => {
+ /* app.get('/api/v1', (req: Request, res: Response) => {
   res.json({ message: 'Welcome to ThreeFunctionDaily API!' });
 });
 
@@ -70,7 +70,7 @@ app.get('/api/v1/db-test', async (req: Request, res: Response) => {
         console.error('DB test route error:', error);
         res.status(500).json({ success: false, message: 'Failed to query database.' });
     }
-});
+}); */
 
 const startServer = async () => {
     await checkDbConnection();
