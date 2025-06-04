@@ -13,7 +13,29 @@ dotenv.config();
 const app: Express = express();
 const port = process.env.PORT || 3001;
 
-app.use(cors());
+const allowedOrigins: (string | undefined)[] = [
+  'http://localhost:5173',
+  process.env.FRONTEND_PROD_URL 
+];
+const filteredAllowedOrigins = allowedOrigins.filter(Boolean) as string[];
+
+const corsOptions = {
+  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+    if (!origin || filteredAllowedOrigins.includes(origin) || (origin && origin.endsWith('.onrender.com'))) {
+      callback(null, true);
+    } else {
+      console.warn(`CORS: Request from origin ${origin} blocked.`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'], 
+  credentials: true 
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); 
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
