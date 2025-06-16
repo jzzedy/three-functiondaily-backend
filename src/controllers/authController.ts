@@ -8,6 +8,57 @@ import { User, UserWithPasswordHash } from '../types/userTypes';
 import { RowDataPacket, ResultSetHeader } from 'mysql2/promise'; 
 import { AuthenticatedRequest } from '../middleware/authMiddleware'; 
 
+export const changePassword = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.user?.id;
+
+    if (!userId) {
+        res.status(401).json({ message: 'User not authenticated.' });
+        return;
+    }
+    if (!currentPassword || !newPassword) {
+        res.status(400).json({ message: 'Current password and new password are required.' });
+        return;
+    }
+    if (newPassword.length < 8) {
+        res.status(400).json({ message: 'New password must be at least 8 characters long.' });
+        return;
+    }
+
+    try {
+        const [users] = await pool.query<RowDataPacket[]>(
+            'SELECT passwordHash FROM Users WHERE id = ?',
+            [userId]
+        );
+
+        if (users.length === 0) {
+            res.status(404).json({ message: 'User not found.' }); 
+            return;
+        }
+
+        const userFromDb = users[0] as UserWithPasswordHash;
+        const isMatch = await bcrypt.compare(currentPassword, userFromDb.passwordHash);
+        if (!isMatch) {
+            res.status(401).json({ message: 'Incorrect current password.' });
+            return;
+        }
+        const salt = await bcrypt.genSalt(10);
+        const newPasswordHash = await bcrypt.hash(newPassword, salt);
+
+        await pool.query<ResultSetHeader>(
+            'UPDATE Users SET passwordHash = ? WHERE id = ?',
+            [newPasswordHash, userId]
+        );
+
+        res.status(200).json({ message: 'Password changed successfully.' });
+
+    } catch (error) {
+        console.error('Error changing password:', error);
+        res.status(500).json({ message: 'Server error while changing password.' });
+    }
+};
+
+
 const JWT_SECRET_KEY: Secret = process.env.JWT_SECRET || 
     (process.env.NODE_ENV === 'production' ? (() => { throw new Error("JWT_SECRET not set in production for authController!"); })() : 'your-dev-fallback-secret-key-32-chars-long-for-auth');
 
