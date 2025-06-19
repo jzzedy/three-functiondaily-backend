@@ -1,6 +1,6 @@
 # 🛠️ Backend API – Productivity Hub
 
-This is the **backend repository** for the [Productivity Hub](https://github.com/your-frontend-repo) – a Task, Expense, and Habit Tracker app with AI feedback features.
+This is the **backend repository** for the [ThreeFunctionDaily](https://github.com/three-functiondaily-frontend) – a Task, Expense, and Habit Tracker app with AI feedback features.
 
 ---
 
