@@ -10,7 +10,7 @@ This is the **backend repository** for the [ThreeFunctionDaily](https://github.c
 - 👤 User Profiles
 - ✅ Task, Expense, Habit API Endpoints
 - 💱 Supports Peso (₱) and Dollar ($) currencies
-- 🌐 Built in PHP (RESTful structure)
+- 🌐 Built in NodeJS/Express
 - 🔄 Works seamlessly with a React + TypeScript frontend
 -  this project is still ongoing -zed
 ---
